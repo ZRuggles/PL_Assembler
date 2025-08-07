@@ -25,12 +25,6 @@
         {
             string binaryInstruction = ConditionCodeToBinary() + 101 + (l == "L" ? "1" : "0") + ConvertOffsetToBinary(Offset, 24);
 
-            Console.WriteLine(ConditionCodeToBinary());
-            Console.WriteLine("101");
-            Console.WriteLine(l == "L" ? "1" : "0");
-            Console.WriteLine(ConvertOffsetToBinary(Offset, 24));
-
-            Console.WriteLine("Length: " + binaryInstruction.Length);
             return binaryInstruction;
         }
     }

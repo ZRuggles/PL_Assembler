@@ -50,20 +50,12 @@
         public override string ToBinary()
         {
             i = IsOp2Immediate() ? "1" : "0";
-            s = s == "S" ? "1" : "0";
+            string S = s == "S" ? "1" : "0";
 
-            string binaryInstruction = ConditionCodeToBinary() + "00" + i + ConvertOpCodeToBinary() + s  + ConvertRegisterToBinary(Rn) + ConvertRegisterToBinary(Rd) + ConvertOpperand2ToBinary(Operand2, 12);
+            string binaryInstruction = ConditionCodeToBinary() + "00" + i + ConvertOpCodeToBinary() + S + ConvertRegisterToBinary(Rn) + ConvertRegisterToBinary(Rd) + ConvertOpperand2ToBinary(Operand2, 12);
 
 
-            Console.WriteLine(ConditionCodeToBinary());
-            Console.WriteLine("00");
-            Console.WriteLine(i);
-            Console.WriteLine(ConvertOpCodeToBinary());
-            Console.WriteLine(s);
-            Console.WriteLine(ConvertRegisterToBinary(Rn));
-            Console.WriteLine(ConvertRegisterToBinary(Rd));
-            Console.WriteLine(ConvertOpperand2ToBinary(Operand2, 12));
-            Console.WriteLine("Length: " + binaryInstruction.Length);
+
             return binaryInstruction;
         }
     }

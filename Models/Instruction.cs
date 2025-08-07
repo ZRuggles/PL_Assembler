@@ -1,4 +1,6 @@
-﻿namespace PL_Assembler.Models
+﻿using Microsoft.AspNetCore.Components.Forms;
+
+namespace PL_Assembler.Models
 {
     public abstract class Instruction
     {
@@ -34,6 +36,33 @@
             ParseInstructionSyntax(instructionSyntax);
         }
 
+        public static Instruction CreateInstruction(string instructionSyntax)
+        {
+            // This method should create an instance of the appropriate Instruction subclass based on the syntax
+            var parts = instructionSyntax.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            string opcode = parts[0].ToUpper();
+
+            switch (opcode)
+            {
+                case "LDR":
+                case "STR":
+                    return new SingleDataTransfer(instructionSyntax);
+                case "B":
+                case "BL":
+                    return new Branch(instructionSyntax);
+                case "ADD":
+                case "SUB":
+                case "AND":
+                case "ORR":
+                    return new DataProcessing(instructionSyntax);
+                case "MOVT":
+                case "MOVW":
+                    return new MOV(instructionSyntax);
+                default:
+                    throw new ArgumentException($"Unknown instruction type: {opcode}");
+            }
+        }
+
         protected void ParseInstructionSyntax(string syntax)
         {
             var parts = syntax.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
@@ -59,20 +88,38 @@
         }
         public string ConvertOffsetToBinary(string offset, int bits)
         {
-            // If operand is a register, convert it
+            if (string.IsNullOrEmpty(offset))
+            {
+                return new string('0', bits); // If offset is empty, return 0s
+            }
+
+            // If offset is a register, convert it to binary
             if (offset.StartsWith("R"))
             {
                 return ConvertRegisterToBinary(offset);
             }
-            // If operand is an immediate, convert it
-            if (offset.StartsWith("0x"))
+
+            // If offset is an immediate value, convert it to binary
+            if (offset.StartsWith("#") || offset.StartsWith("0x"))
             {
-                int immediate = Convert.ToInt32(offset, 16);
-                return Convert.ToString(immediate, 2).PadLeft(bits, '0'); // Example: #10 -> 000000001010
+                int immediate = 0;
+
+                // Parse the offset as an immediate value, handling hex (# or 0x)
+                if (offset.StartsWith("#"))
+                {
+                    immediate = int.Parse(offset.Substring(1)); // Remove '#' and convert
+                }
+                else if (offset.StartsWith("0x"))
+                {
+                    immediate = Convert.ToInt32(offset, 16); // Convert hex value
+                }
+
+                return Convert.ToString(immediate, 2).PadLeft(bits, '0'); // Convert to binary and pad
             }
 
-            return ToString().PadLeft(bits, '0'); 
+            return "000000000000"; // Default if no valid offset is provided (fallback)
         }
+
 
         public string ConvertOpperand2ToBinary(string op2, int bits)
         {
@@ -104,6 +151,34 @@
                 return Convert.ToString(immValue, 2).PadLeft(bits, '0');
             }
             return immediate.PadLeft(bits, '0'); // Fallback to just padding the string
+        }
+
+        public string ToHex()
+        {
+            string binaryInstruction = ToBinary();
+            return Convert.ToString(Convert.ToInt64(binaryInstruction, 2), 16).ToUpper().PadLeft(8, '0');
+        }
+
+        public string ToHexFlip()
+        {
+            string hexInstruction = ToHex();
+            string[] hexInstructionParts = Enumerable
+                .Range(0, hexInstruction.Length / 2)
+                .Select(i => hexInstruction.Substring(i * 2, 2))
+                .ToArray();
+
+            Array.Reverse(hexInstructionParts);
+
+            return string.Join("", hexInstructionParts);
+        }
+
+        public byte[] ToByteArray()
+        {
+            string flippedHex = ToHexFlip();
+
+            return Enumerable.Range(0, flippedHex.Length / 2)
+             .Select(i => Convert.ToByte(flippedHex.Substring(i * 2, 2), 16))
+             .ToArray();
         }
 
         public abstract string ToBinary();

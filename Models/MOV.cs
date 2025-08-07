@@ -28,13 +28,6 @@
             string binaryInstruction = ConditionCodeToBinary() + "0011" + (topOrWide.Contains("W") ? "0000" : "0100") + imm4 + ConvertRegisterToBinary(Rd) + imm12;
 
 
-            Console.WriteLine(ConditionCodeToBinary());
-            Console.WriteLine("0011");
-            Console.WriteLine(topOrWide.Contains("W") ? "0000" : "0100");
-            Console.WriteLine(imm4);
-            Console.WriteLine(ConvertRegisterToBinary(Rd));
-            Console.WriteLine(imm12);
-            Console.WriteLine("Length: " + binaryInstruction.Length);
             return binaryInstruction;
         }
     }

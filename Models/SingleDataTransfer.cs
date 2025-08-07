@@ -23,32 +23,32 @@
         public SingleDataTransfer(string instructionSyntax)
             : base(instructionSyntax)
         {
-
+            //<LDR | STR>{cond}{B}{T} Rd, <Address>
+            int marker = 0;
+            this.l = ParsedSyntax[marker++].ToUpper().Contains("L") ? "L" : "";
+            ConditionCode = ConditionCodeMap.ContainsKey(ParsedSyntax[marker]) ? ParsedSyntax[marker++] : "AL";
+            this.b = ParsedSyntax[marker].ToUpper().Contains("B") ? "B" : "";
+            marker += b == "B" ? 1 : 0;
+            Rd = ParsedSyntax[marker++].ToUpper();
+            Rn = ParsedSyntax[marker++].ToUpper();
+            Offset = ParsedSyntax.Length > marker ? ParsedSyntax[marker].ToLower() : "";
         }
 
         public override string ToBinary()
         {
-            if (ParsedSyntax[0] == "LDR")
-            {
-                this.l = "1"; // Load
-            }
-            else if (ParsedSyntax[0] == "STR")
-            {
-                this.l = "0"; // Store
-            }
-            else
-            {
-                throw new ArgumentException("Invalid instruction syntax for Single Data Transfer.");
-            }
+            
+
 
             ConditionCode = ParsedSyntax.Length > 1 ? ParsedSyntax[1] : "AL";
 
             ParseFlagsAndOperands();
 
-            string binaryInstruction = ConditionCodeToBinary() + "01" + i + p + u + b + w + l + ConvertRegisterToBinary(Rn) + ConvertRegisterToBinary(Rd) + ConvertOffsetToBinary(Offset, 12);
+            string binaryInstruction = ConditionCodeToBinary() + "01" + i + p + u + b + w + (l.Contains("L") ? "1" : "0") + ConvertRegisterToBinary(Rn) + ConvertRegisterToBinary(Rd) + ConvertOffsetToBinary(Offset, 12);
             //condition + 01 + i + p + u + b + w + l + rn + rd + offset
             return binaryInstruction;
         }
+
+
 
         private void ParseFlagsAndOperands()
         {
@@ -58,19 +58,6 @@
             b = "0"; 
             w = "0"; 
             i = "0";
-
-            if (ParsedSyntax.Length > 3)
-            {
-                p = ParsedSyntax[3] == "!" ? "1" : "0"; 
-                u = ParsedSyntax.Length > 4 && ParsedSyntax[4] == "+" ? "1" : "0"; 
-                b = ParsedSyntax.Length > 5 && ParsedSyntax[5] == "B" ? "1" : "0"; 
-                w = ParsedSyntax.Length > 6 && ParsedSyntax[6] == "!" ? "1" : "0"; 
-            }
-
-            Rd = Rd = ParsedSyntax[1];
-            Rn = ParsedSyntax[2];
-
-            Offset = ParsedSyntax.Length > 3 ? ParsedSyntax[3] : "";
         }
     }
 }

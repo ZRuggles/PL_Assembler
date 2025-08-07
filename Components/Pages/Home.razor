@@ -26,6 +26,10 @@ else
 }
 
 <button class="btn btn-primary mt-2" @onclick=HandleSubmit>Submit</button>
+<button class="btn btn-outline mt-2" @onclick=HandleBinaryDownload>Download Binary.txt</button>
+<button class="btn btn-outline mt-2" @onclick=HandleHexDownload>Download Hex.txt</button>
+<button class="btn btn-outline mt-2" @onclick=HandleHexFlipDownload>Download Flipped_Hex.txt</button>
+<button class="btn btn-secondary mt-2" @onclick=HandleByteDownload>Download kernel7.img</button>
 
 
 
@@ -37,6 +41,7 @@ else
     // You can add methods to handle the input text, such as parsing or processing ARM instructions.
     // For example, you might want to add a method to handle form submission or button clicks.
     private List<Instruction> instructions = new List<Instruction>();
+    [Inject] private IJSRuntime JSRuntime { get; set; }
 
     private async Task LoadFile(InputFileChangeEventArgs e)
     {
@@ -61,9 +66,50 @@ else
 
     private void HandleSubmit()
     {
-        // Process the InputText here, e.g., parse ARM instructions or handle the uploaded file.
-        Console.WriteLine("Submitted Text: " + InputText);
-        Instruction Test = new MOV("MOVT R4, 0x3F20");
-        Console.WriteLine("Instruction: " + Test.ToBinary());
+        // Split InputText into lines
+        string[] lines = InputText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            Console.WriteLine("Line: " + line);
+            Instruction instruction = Instruction.CreateInstruction(line);
+            instructions.Add(instruction);
+        }
+
+        foreach (var i in instructions)
+        {
+            Console.WriteLine("Instruction: " + i.ToBinary());
+        }
+        Console.WriteLine("Total instructions: " + instructions.Count);
+    }
+
+    private async Task HandleBinaryDownload()
+    {
+        var content = string.Join("\n", instructions.Select(i => i.ToBinary()));
+
+        await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "binary.txt");
+    }
+
+    private async Task HandleHexDownload()
+    {
+        var content = string.Join("\n", instructions.Select(i => i.ToHex()));
+
+        await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "hex.txt");
+    }
+
+    private async Task HandleHexFlipDownload()
+    {
+        var content = string.Join("\n", instructions.Select(i => i.ToHexFlip()));
+        await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "flipped_hex.txt");
+    }
+
+    private async Task HandleByteDownload()
+    {
+        byte[] content = instructions
+            .SelectMany(i => i.ToByteArray()) // Flatten all byte arrays
+            .ToArray(); 
+            Console.WriteLine("Total bytes: " + content);
+        string base64 = Convert.ToBase64String(content);
+        await JSRuntime.InvokeVoidAsync("downloadBinaryFile", base64, "kernel7.img");
     }
 }
