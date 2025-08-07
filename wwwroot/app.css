@@ -1,5 +1,21 @@
-html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+.list-group-item span:nth-child(2) {
+    color: #0d6efd;
+    font-weight: bold;
+}
+.list-group-item span:nth-child(3) {
+    color: #198754;
+}
+.list-group-item span:nth-child(4) {
+    color: #d63384;
+    font-style: italic;
+}
+.list-group-item span:nth-child(5) {
+    color: #93619d;
+    font-style: italic;
+}
+
+body {
+    background-color: #ffeeee !important;
 }
 
 a, .btn-link {
@@ -49,3 +65,108 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+/* Drop Zone Styling */
+.drop-zone {
+    background-color: #f8f9fa;
+    border: 2px dashed #6c757d;
+    border-radius: 10px;
+    transition: background-color 0.2s ease;
+}
+
+    .drop-zone:hover {
+        background-color: #e9ecef;
+    }
+
+/* Parsed List Styling */
+.list-group-item {
+    display: grid;
+    grid-template-columns: 300px 300px 100px 100px 100px;
+    gap: 10px;
+    font-family: monospace;
+    white-space: nowrap;
+    font-size: 0.95rem;
+    background-color: #fdfdfd;
+    border-left: 4px solid #007bff;
+    transition: background-color 0.3s;
+}
+
+
+    .list-group-item:hover {
+        background-color: #f1f1f1;
+    }
+
+/* Status Message Animation */
+.alert-info.text-center {
+    font-weight: 600;
+    animation: fadePulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes fadePulse {
+    0% {
+        opacity: 0.7;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.list-group-item.animated-fade-in {
+    animation: fadeInLeft 0.6s ease forwards;
+}
+
+
+/* Buttons */
+.btn-outline-dark {
+    transition: transform 0.2s ease;
+}
+
+    .btn-outline-dark:hover {
+        transform: scale(1.03);
+    }
+
+.animated-stage {
+    opacity: 0;
+    animation: fadeSlideIn 0.6s ease forwards;
+}
+
+.stage-binary {
+    animation-delay: 0s;
+}
+
+.stage-hex {
+    animation-delay: 0.1s;
+}
+
+.stage-flip {
+    animation-delay: 0.2s;
+}
+.stage-byte {
+    animation-delay: 0.3s;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-15px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+

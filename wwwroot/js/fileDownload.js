@@ -23,3 +23,31 @@ window.downloadBinaryFile = function (base64Data, filename) {
     a.click();
     URL.revokeObjectURL(a.href);
 };
+window.blazorFileDrop = {
+    initDropZone: function (elementId, dotNetHelper) {
+        const dropZone = document.getElementById(elementId);
+
+        dropZone.addEventListener("dragover", function (e) {
+            e.preventDefault();
+            dropZone.classList.add("dragging");
+        });
+
+        dropZone.addEventListener("dragleave", function () {
+            dropZone.classList.remove("dragging");
+        });
+
+        dropZone.addEventListener("drop", function (e) {
+            e.preventDefault();
+            dropZone.classList.remove("dragging");
+
+            if (e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                const reader = new FileReader();
+                reader.onload = function () {
+                    dotNetHelper.invokeMethodAsync("LoadFromDragDrop", reader.result);
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+};

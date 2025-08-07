@@ -3,113 +3,392 @@
 
 <PageTitle>Assembler</PageTitle>
 
-<h1>Type or upload ARM instructions</h1>
+<div class="container py-5">
+    <h1 class="text-center mb-4">ARM Assembler Tool</h1>
 
-<InputTextArea @bind-Value="InputText" Class="form-control" Rows="10" Placeholder="Enter ARM instructions here..."/>
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <label class="form-label">Type or upload ARM instructions</label>
+            <InputTextArea @bind-Value="InputText" class="form-control mb-3" rows="8" placeholder="Enter ARM instructions here..." />
 
-<InputFile OnChange="LoadFile" />
+            <div id="drop-zone" class="drop-zone border border-secondary rounded text-center p-3 mb-3">
+                <span class="text-muted">Drag and drop a .txt file here, or use the file input below</span>
+            </div>
 
-@if (isLoading)
-{
-    <p>Uploading...</p>
-}
-else if(UploadedFile == null)
-{
-    <p>No file uploaded.</p>
-}
-else 
-{
-    <p>Name: @UploadedFile.Name</p>
-    <p>Size: @UploadedFile.Size bytes</p>
-    <p>Type: @UploadedFile.ContentType</p>
-    <p>Content: @InputText</p>
-}
+            <div class="mb-3">
+                <label class="form-label">Upload File:</label>
+                <InputFile OnChange="LoadFile" class="form-control" />
+            </div>
 
-<button class="btn btn-primary mt-2" @onclick=HandleSubmit>Submit</button>
-<button class="btn btn-outline mt-2" @onclick=HandleBinaryDownload>Download Binary.txt</button>
-<button class="btn btn-outline mt-2" @onclick=HandleHexDownload>Download Hex.txt</button>
-<button class="btn btn-outline mt-2" @onclick=HandleHexFlipDownload>Download Flipped_Hex.txt</button>
-<button class="btn btn-secondary mt-2" @onclick=HandleByteDownload>Download kernel7.img</button>
+            @if (isLoading)
+            {
+                <div class="alert alert-info">Uploading and processing file...</div>
+            }
+            else if (UploadedFile == null && string.IsNullOrWhiteSpace(InputText))
+            {
+                <div class="alert alert-secondary">No file or input provided.</div>
+            }
+            else if (UploadedFile != null)
+            {
+                <div class="alert alert-success">
+                    <strong>Uploaded:</strong> @UploadedFile.Name (@UploadedFile.Size bytes)
+                </div>
+            }
+        </div>
+    </div>
 
+    <div class="d-flex flex-wrap gap-2 justify-content-center mb-4">
+        <button class="btn btn-primary" @onclick=HandleSubmit disabled="@(isProcessing)">
+            @(isProcessing ? "Processing..." : "Submit")
+        </button>
+        <button class="btn btn-outline-dark" @onclick=HandleBinaryDownload disabled="@(instructions.Count == 0)">
+            Download Binary.txt
+        </button>
+        <button class="btn btn-outline-dark" @onclick=HandleHexDownload disabled="@(instructions.Count == 0)">
+            Download Hex.txt
+        </button>
+        <button class="btn btn-outline-dark" @onclick=HandleHexFlipDownload disabled="@(instructions.Count == 0)">
+            Download Flipped_Hex.txt
+        </button>
+        <button class="btn btn-success" @onclick=HandleByteDownload disabled="@(instructions.Count == 0)">
+            Download kernel7.img
+        </button>
+    </div>
 
+    @if (!string.IsNullOrEmpty(StatusMessage))
+    {
+        <div class="alert alert-info text-center">@StatusMessage</div>
+    }
 
-@code 
-{
+    @if (ParsedLines.Any())
+    {
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>Parsed Instructions (Live View)</strong>
+            </div>
+            <ul class="list-group list-group-flush">
+                @for (int i = 0; i < ParsedLines.Count; i++)
+                {
+                    <li class="list-group-item">
+                        <span>@ParsedLines[i].Syntax</span>
+
+                        @if (!string.IsNullOrWhiteSpace(ParsedLines[i].Binary))
+                        {
+                            <span class="animated-stage stage-binary"> → @ParsedLines[i].Binary</span>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(ParsedLines[i].Hex))
+                        {
+                            <span class="animated-stage stage-hex"> → @ParsedLines[i].Hex</span>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(ParsedLines[i].Flipped))
+                        {
+                            <span class="animated-stage stage-flip"> → @ParsedLines[i].Flipped</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(ParsedLines[i].Byte))
+                        {
+                            <span class="animated-stage stage-byte"> → @ParsedLines[i].Byte</span>
+                        }
+                    </li>
+                }
+            </ul>
+
+        </div>
+    }
+</div>
+
+@code {
     private string InputText { get; set; } = string.Empty;
-    private IBrowserFile UploadedFile { get; set; } 
+    private IBrowserFile UploadedFile { get; set; }
     private bool isLoading { get; set; } = false;
-    // You can add methods to handle the input text, such as parsing or processing ARM instructions.
-    // For example, you might want to add a method to handle form submission or button clicks.
-    private List<Instruction> instructions = new List<Instruction>();
+    private bool isProcessing { get; set; } = false;
+    private string StatusMessage { get; set; } = string.Empty;
+    private List<Instruction> instructions = new();
+    private List<(string Syntax, string? Binary, string? Hex, string? Flipped, string? Byte)> ParsedLines = new();
+
     [Inject] private IJSRuntime JSRuntime { get; set; }
 
     private async Task LoadFile(InputFileChangeEventArgs e)
     {
         isLoading = true;
+        UploadedFile = e.File;
 
         try
         {
-            UploadedFile = e.File;
-            Console.WriteLine("File selected: " + UploadedFile.Name);
-
-            using var stream = UploadedFile.OpenReadStream(maxAllowedSize: 1024 * 1024); // 1 MB limit
+            using var stream = UploadedFile.OpenReadStream(1024 * 1024);
             using var reader = new StreamReader(stream);
             InputText = await reader.ReadToEndAsync();
+            StatusMessage = "File loaded successfully.";
         }
         catch (Exception ex)
         {
-            Console.WriteLine("File: {FileName} Error: {Error}",
-                UploadedFile.Name, ex.Message);
+            StatusMessage = $"Error reading file: {ex.Message}";
         }
+
         isLoading = false;
     }
 
-    private void HandleSubmit()
+    private async Task HandleSubmit()
     {
-        // Split InputText into lines
-        string[] lines = InputText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        isProcessing = true;
+        instructions.Clear();
+        ParsedLines.Clear();
+        StatusMessage = "Processing instructions one by one...";
+
+        var lines = InputText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var line in lines)
         {
-            Console.WriteLine("Line: " + line);
-            Instruction instruction = Instruction.CreateInstruction(line);
-            instructions.Add(instruction);
+            await Task.Delay(200); // simulate delay
+            try  
+            {  
+                Instruction instruction = Instruction.CreateInstruction(line);  
+                instructions.Add(instruction);  
+                ParsedLines.Add((instruction.instructionSyntax, null, null, null, null));
+            }  
+            catch (Exception ex)  
+            {  
+                ParsedLines.Add((Syntax: $"ERROR parsing line: {line}", Binary: null, Hex: null, Flipped: null, Byte: null));
+            }
+            StateHasChanged();
         }
 
-        foreach (var i in instructions)
-        {
-            Console.WriteLine("Instruction: " + i.ToBinary());
-        }
-        Console.WriteLine("Total instructions: " + instructions.Count);
+        StatusMessage = $"Parsed {instructions.Count} instruction(s).";
+        isProcessing = false;
     }
 
     private async Task HandleBinaryDownload()
     {
-        var content = string.Join("\n", instructions.Select(i => i.ToBinary()));
+        const int delay = 200;
+        ParsedLines = instructions
+            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .ToList();
 
+
+        StatusMessage = "Converting Instructions → Binary...";
+
+        for (int i = 0; i < instructions.Count; i++)
+        {
+            ParsedLines[i] = (ParsedLines[i].Syntax, instructions[i].ToBinary(), null, null, null);
+            StateHasChanged();
+            await Task.Delay(delay);
+        }
+
+        StatusMessage = "Download starting...";
+        await Task.Delay(300);
+
+        var content = string.Join("\n", instructions.Select(i => i.ToBinary()));
         await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "binary.txt");
+
+        StatusMessage = "Downloaded binary.txt.";
     }
+
+
 
     private async Task HandleHexDownload()
     {
-        var content = string.Join("\n", instructions.Select(i => i.ToHex()));
+        const int delay = 200;
+        StatusMessage = "Converting Binary → Hex...";
 
+        int count = instructions.Count;
+
+        // Initialize all lines with syntax only
+        ParsedLines = instructions
+            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .ToList();
+
+        for (int t = 0; t < count + 1; t++)
+        {
+            if (t < count)
+            {
+                ParsedLines[t] = (
+                    ParsedLines[t].Syntax,
+                    Pad(instructions[t].ToBinary(), 36), // Pad binary to consistent width
+                    null,
+                    null,
+                    null
+                );
+            }
+
+            if (t - 1 >= 0)
+            {
+                ParsedLines[t - 1] = (
+                    ParsedLines[t - 1].Syntax,
+                    ParsedLines[t - 1].Binary,
+                    Pad(instructions[t - 1].ToHex(), 16), // Pad hex for alignment
+                    null,
+                    null
+                );
+            }
+
+            StateHasChanged();
+            await Task.Delay(delay);
+        }
+
+        StatusMessage = "Download starting...";
+        await Task.Delay(300);
+
+        var content = string.Join("\n", instructions.Select(i => i.ToHex()));
         await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "hex.txt");
+
+        StatusMessage = "Downloaded hex.txt.";
     }
+
+
+
+    string Pad(string value, int width) => value.PadRight(width);
 
     private async Task HandleHexFlipDownload()
+{
+    const int delay = 200;
+    StatusMessage = "Converting Binary → Hex → Flipped Hex...";
+
+        int count = instructions.Count;
+        ParsedLines = instructions
+            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .ToList();
+
+    for (int t = 0; t < count + 2; t++)
     {
-        var content = string.Join("\n", instructions.Select(i => i.ToHexFlip()));
-        await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "flipped_hex.txt");
+        if (t < count)
+        {
+            ParsedLines[t] = (
+                ParsedLines[t].Syntax,
+                Pad(instructions[t].ToBinary(), 36),
+                ParsedLines[t].Hex,
+                ParsedLines[t].Flipped,
+                t - 1 >= 0 ? ParsedLines[t - 1].Byte : null
+            );
+        }
+
+        if (t - 1 >= 0 && t - 1 < count)
+        {
+            ParsedLines[t - 1] = (
+                ParsedLines[t - 1].Syntax,
+                ParsedLines[t - 1].Binary,
+                Pad(instructions[t - 1].ToHex(), 36),
+                ParsedLines[t - 1].Flipped,
+                ParsedLines[t - 1].Byte
+            );
+        }
+
+        if (t - 2 >= 0 && t - 2 < count)
+        {
+            ParsedLines[t - 2] = (
+                ParsedLines[t - 2].Syntax,
+                ParsedLines[t - 2].Binary,
+                ParsedLines[t - 2].Hex,
+                Pad(instructions[t - 2].ToHexFlip(), 36),
+                ParsedLines[t - 2].Byte
+            );
+        }
+
+        StateHasChanged();
+        await Task.Delay(delay);
     }
+
+    StatusMessage = "Download starting...";
+    await Task.Delay(300);
+
+    var content = string.Join("\n", instructions.Select(i => i.ToHexFlip()));
+    await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "flipped_hex.txt");
+
+    StatusMessage = "Downloaded flipped_hex.txt.";
+}
+
+
 
     private async Task HandleByteDownload()
     {
-        byte[] content = instructions
-            .SelectMany(i => i.ToByteArray()) // Flatten all byte arrays
-            .ToArray(); 
-            Console.WriteLine("Total bytes: " + content);
+        const int delay = 200;
+        StatusMessage = "Converting Flipped Hex → Bytes...";
+
+        int count = instructions.Count;
+        ParsedLines = instructions
+            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .ToList();
+
+        for (int t = 0; t < count + 3; t++)
+        {
+            if (t < count)
+            {
+                ParsedLines[t] = (
+                    ParsedLines[t].Syntax,
+                    Pad(instructions[t].ToBinary(), 36),
+                    ParsedLines[t].Hex,
+                    ParsedLines[t].Flipped,
+                    t - 1 >= 0 ? ParsedLines[t - 1].Byte : null
+                );
+            }
+
+            if (t - 1 >= 0 && t - 1 < count)
+            {
+                ParsedLines[t - 1] = (
+                    ParsedLines[t - 1].Syntax,
+                    ParsedLines[t - 1].Binary,
+                    Pad(instructions[t - 1].ToHex(), 36),
+                    ParsedLines[t - 1].Flipped,
+                    ParsedLines[t - 1].Byte
+                );
+            }
+
+            if (t - 2 >= 0 && t - 2 < count)
+            {
+                ParsedLines[t - 2] = (
+                    ParsedLines[t - 2].Syntax,
+                    ParsedLines[t - 2].Binary,
+                    ParsedLines[t - 2].Hex,
+                    Pad(instructions[t - 2].ToHexFlip(), 36),
+                    ParsedLines[t - 2].Byte
+                );
+            }
+
+            if (t - 3 >= 0 && t - 3 < count)
+            {
+                ParsedLines[t - 3] = (
+                    ParsedLines[t - 3].Syntax,
+                    ParsedLines[t - 3].Binary,
+                    ParsedLines[t - 3].Hex,
+                    ParsedLines[t - 3].Flipped,
+                    Pad(string.Join(" ", instructions[t - 3].ToByteArray().Select(b => b.ToString("X2"))), 36)
+                );
+            }
+
+            StateHasChanged();
+            await Task.Delay(delay);
+        }
+
+        StatusMessage = "Download starting...";
+        await Task.Delay(300);
+
+        byte[] content = instructions.SelectMany(i => i.ToByteArray()).ToArray();
         string base64 = Convert.ToBase64String(content);
         await JSRuntime.InvokeVoidAsync("downloadBinaryFile", base64, "kernel7.img");
+
+        StatusMessage = "Downloaded kernel7.img.";
+    }
+
+
+
+
+    private DotNetObjectReference<Home>? objRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("blazorFileDrop.initDropZone", "drop-zone", objRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task LoadFromDragDrop(string fileContent)
+    {
+        InputText = fileContent;
+        StatusMessage = "File loaded from drag-and-drop.";
+        UploadedFile = null; // reset any previous file
+        await InvokeAsync(StateHasChanged);
     }
 }
