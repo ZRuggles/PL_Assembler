@@ -1,0 +1,69 @@
+﻿@page "/"
+@rendermode InteractiveServer
+
+<PageTitle>Assembler</PageTitle>
+
+<h1>Type or upload ARM instructions</h1>
+
+<InputTextArea @bind-Value="InputText" Class="form-control" Rows="10" Placeholder="Enter ARM instructions here..."/>
+
+<InputFile OnChange="LoadFile" />
+
+@if (isLoading)
+{
+    <p>Uploading...</p>
+}
+else if(UploadedFile == null)
+{
+    <p>No file uploaded.</p>
+}
+else 
+{
+    <p>Name: @UploadedFile.Name</p>
+    <p>Size: @UploadedFile.Size bytes</p>
+    <p>Type: @UploadedFile.ContentType</p>
+    <p>Content: @InputText</p>
+}
+
+<button class="btn btn-primary mt-2" @onclick=HandleSubmit>Submit</button>
+
+
+
+@code 
+{
+    private string InputText { get; set; } = string.Empty;
+    private IBrowserFile UploadedFile { get; set; } 
+    private bool isLoading { get; set; } = false;
+    // You can add methods to handle the input text, such as parsing or processing ARM instructions.
+    // For example, you might want to add a method to handle form submission or button clicks.
+    private List<Instruction> instructions = new List<Instruction>();
+
+    private async Task LoadFile(InputFileChangeEventArgs e)
+    {
+        isLoading = true;
+
+        try
+        {
+            UploadedFile = e.File;
+            Console.WriteLine("File selected: " + UploadedFile.Name);
+
+            using var stream = UploadedFile.OpenReadStream(maxAllowedSize: 1024 * 1024); // 1 MB limit
+            using var reader = new StreamReader(stream);
+            InputText = await reader.ReadToEndAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("File: {FileName} Error: {Error}",
+                UploadedFile.Name, ex.Message);
+        }
+        isLoading = false;
+    }
+
+    private void HandleSubmit()
+    {
+        // Process the InputText here, e.g., parse ARM instructions or handle the uploaded file.
+        Console.WriteLine("Submitted Text: " + InputText);
+        Instruction Test = new MOV("MOVT R4, 0x3F20");
+        Console.WriteLine("Instruction: " + Test.ToBinary());
+    }
+}
