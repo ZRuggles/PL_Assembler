@@ -79,9 +79,10 @@ h1:focus {
     }
 
 /* Parsed List Styling */
-.list-group-item {
+/* default layout with label column */
+.list-group-item.with-label {
     display: grid;
-    grid-template-columns: 300px 300px 100px 100px 100px;
+    grid-template-columns: 200px 200px 300px 100px 100px 100px;
     gap: 10px;
     font-family: monospace;
     white-space: nowrap;
@@ -90,6 +91,20 @@ h1:focus {
     border-left: 4px solid #007bff;
     transition: background-color 0.3s;
 }
+
+/* smaller layout without label column */
+.list-group-item.no-label {
+    display: grid;
+    grid-template-columns: 200px 300px 100px 100px 100px;
+    gap: 10px;
+    font-family: monospace;
+    white-space: nowrap;
+    font-size: 0.95rem;
+    background-color: #fdfdfd;
+    border-left: 4px solid #28a745;
+    transition: background-color 0.3s;
+}
+
 
 
     .list-group-item:hover {

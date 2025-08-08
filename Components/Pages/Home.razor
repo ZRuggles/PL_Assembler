@@ -41,23 +41,23 @@
         <button class="btn btn-primary" @onclick=HandleSubmit disabled="@(isProcessing)">
             @(isProcessing ? "Processing..." : "Submit")
         </button>
-        <button class="btn btn-outline-dark" @onclick=HandleBinaryDownload disabled="@(instructions.Count == 0)">
+        <button class="btn btn-outline-dark" @onclick=HandleBinaryDownload disabled="@(isProcessing || isDownloading)">
             Download Binary.txt
         </button>
-        <button class="btn btn-outline-dark" @onclick=HandleHexDownload disabled="@(instructions.Count == 0)">
+        <button class="btn btn-outline-dark" @onclick=HandleHexDownload disabled="@(isProcessing || isDownloading)">
             Download Hex.txt
         </button>
-        <button class="btn btn-outline-dark" @onclick=HandleHexFlipDownload disabled="@(instructions.Count == 0)">
+        <button class="btn btn-outline-dark" @onclick=HandleHexFlipDownload disabled="@(isProcessing || isDownloading)">
             Download Flipped_Hex.txt
         </button>
-        <button class="btn btn-success" @onclick=HandleByteDownload disabled="@(instructions.Count == 0)">
+        <button class="btn btn-success" @onclick=HandleByteDownload disabled="@(isProcessing || isDownloading)">
             Download kernel7.img
         </button>
     </div>
 
     @if (!string.IsNullOrEmpty(StatusMessage))
     {
-        <div class="alert alert-info text-center">@StatusMessage</div>
+        <div class="alert alert-info text-center sticky-lg-top">@StatusMessage</div>
     }
 
     @if (ParsedLines.Any())
@@ -69,14 +69,20 @@
             <ul class="list-group list-group-flush">
                 @for (int i = 0; i < ParsedLines.Count; i++)
                 {
-                    <li class="list-group-item">
+
+                    var itemClass = containsLabels ? "list-group-item with-label" : "list-group-item no-label";
+
+                    <li class="@itemClass">
                         <span>@ParsedLines[i].Syntax</span>
 
+                        @if (!string.IsNullOrWhiteSpace(@ParsedLines[i].OffsetSyntax))
+                        {
+                            <span class="ms-2 text-primary">→ <code>@ParsedLines[i].OffsetSyntax</code></span>
+                        }
                         @if (!string.IsNullOrWhiteSpace(ParsedLines[i].Binary))
                         {
                             <span class="animated-stage stage-binary"> → @ParsedLines[i].Binary</span>
                         }
-
                         @if (!string.IsNullOrWhiteSpace(ParsedLines[i].Hex))
                         {
                             <span class="animated-stage stage-hex"> → @ParsedLines[i].Hex</span>
@@ -103,11 +109,14 @@
     private IBrowserFile UploadedFile { get; set; }
     private bool isLoading { get; set; } = false;
     private bool isProcessing { get; set; } = false;
+    private bool isDownloading { get; set; } = false;
+    private bool containsLabels = false;
     private string StatusMessage { get; set; } = string.Empty;
     private List<Instruction> instructions = new();
-    private List<(string Syntax, string? Binary, string? Hex, string? Flipped, string? Byte)> ParsedLines = new();
+    private List<(string Syntax, string? OffsetSyntax, string? Binary, string? Hex, string? Flipped, string? Byte)> ParsedLines = new();
 
     [Inject] private IJSRuntime JSRuntime { get; set; }
+
 
     private async Task LoadFile(InputFileChangeEventArgs e)
     {
@@ -145,24 +154,95 @@
             {  
                 Instruction instruction = Instruction.CreateInstruction(line);  
                 instructions.Add(instruction);  
-                ParsedLines.Add((instruction.instructionSyntax, null, null, null, null));
+                ParsedLines.Add((instruction.instructionSyntax,null, null, null, null, null));
             }  
             catch (Exception ex)  
             {  
-                ParsedLines.Add((Syntax: $"ERROR parsing line: {line}", Binary: null, Hex: null, Flipped: null, Byte: null));
+                ParsedLines.Add((Syntax: $"ERROR parsing line: {line}",OffsetSyntax: null, Binary: null, Hex: null, Flipped: null, Byte: null));
             }
             StateHasChanged();
+        }
+
+        containsLabels = instructions.Any(i => !string.IsNullOrEmpty(i.Label));
+
+        if (containsLabels)
+        {
+            ResolveAllOffsets(instructions);
+
+            StatusMessage = "Labels Detected, Resolving Offsets...";
+            StateHasChanged();
+
+            ParsedLines = instructions
+                .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null, (string?)null))
+                .ToList();
+
+            for (int i = 0; i < instructions.Count; i++)
+            {
+                string offsetSyntax;
+
+                if (!string.IsNullOrEmpty(instructions[i].Label) && instructions[i].Label.Contains(">") && !string.IsNullOrEmpty(instructions[i].Offset))
+                {
+                    offsetSyntax = instructions[i].instructionSyntax.Replace(instructions[i].Label, instructions[i].Offset);
+                }
+                else if (!string.IsNullOrEmpty(instructions[i].Label) && instructions[i].Label.Contains("<"))
+                {
+                    offsetSyntax = instructions[i].instructionSyntax.Replace(instructions[i].Label, "");
+                }
+                else
+                {
+                    offsetSyntax = instructions[i].instructionSyntax;
+                }
+
+                instructions[i].offsetSyntax = offsetSyntax;
+                ParsedLines[i] = (instructions[i].instructionSyntax, offsetSyntax, null, null, null, null);
+
+                StateHasChanged();
+                await Task.Delay(200);
+            }
         }
 
         StatusMessage = $"Parsed {instructions.Count} instruction(s).";
         isProcessing = false;
     }
 
+    public void ResolveAllOffsets(List<Instruction> instructions)
+    {
+        Dictionary<string, int> labelPositions = new();
+
+        // Map all <Label destinations only>
+        for (int i = 0; i < instructions.Count; i++)
+        {
+            var label = instructions[i].Label;
+            if (!string.IsNullOrEmpty(label) && label.Contains("<"))
+            {
+                string cleanedLabel = label.Replace("<", "").Replace(">", "");
+                if (!labelPositions.ContainsKey(cleanedLabel))
+                {
+                    labelPositions[cleanedLabel] = i;
+                }
+            }
+        }
+
+        // Resolve >Label references
+        for (int i = 0; i < instructions.Count; i++)
+        {
+            var label = instructions[i].Label;
+            if (!string.IsNullOrEmpty(label) && label.Contains(">"))
+            {
+                instructions[i].ResolveLabelOffset(labelPositions, i);
+            }
+        }
+    }
+
+
+
+
     private async Task HandleBinaryDownload()
     {
+        isDownloading = true;
         const int delay = 200;
         ParsedLines = instructions
-            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .Select(i => (i.instructionSyntax, i.offsetSyntax, (string?)null , (string?)null, (string?)null, (string?)null))
             .ToList();
 
 
@@ -170,7 +250,7 @@
 
         for (int i = 0; i < instructions.Count; i++)
         {
-            ParsedLines[i] = (ParsedLines[i].Syntax, instructions[i].ToBinary(), null, null, null);
+            ParsedLines[i] = (ParsedLines[i].Syntax, ParsedLines[i].OffsetSyntax, instructions[i].ToBinary(), null, null, null);
             StateHasChanged();
             await Task.Delay(delay);
         }
@@ -182,20 +262,20 @@
         await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "binary.txt");
 
         StatusMessage = "Downloaded binary.txt.";
+        isDownloading = false;
     }
-
-
 
     private async Task HandleHexDownload()
     {
+        isDownloading = true;
         const int delay = 200;
-        StatusMessage = "Converting Binary → Hex...";
+        StatusMessage = "Converting Instructions → Binary → Hex...";
 
         int count = instructions.Count;
 
         // Initialize all lines with syntax only
         ParsedLines = instructions
-            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .Select(i => (i.instructionSyntax, i.offsetSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
             .ToList();
 
         for (int t = 0; t < count + 1; t++)
@@ -204,7 +284,8 @@
             {
                 ParsedLines[t] = (
                     ParsedLines[t].Syntax,
-                    Pad(instructions[t].ToBinary(), 36), // Pad binary to consistent width
+                    ParsedLines[t].OffsetSyntax,
+                    instructions[t].ToBinary(), // Pad binary to consistent width
                     null,
                     null,
                     null
@@ -215,8 +296,9 @@
             {
                 ParsedLines[t - 1] = (
                     ParsedLines[t - 1].Syntax,
+                    ParsedLines[t - 1].OffsetSyntax,
                     ParsedLines[t - 1].Binary,
-                    Pad(instructions[t - 1].ToHex(), 16), // Pad hex for alignment
+                    instructions[t - 1].ToHex(), // Pad hex for alignment
                     null,
                     null
                 );
@@ -233,20 +315,18 @@
         await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "hex.txt");
 
         StatusMessage = "Downloaded hex.txt.";
+        isDownloading = false;
     }
-
-
-
-    string Pad(string value, int width) => value.PadRight(width);
 
     private async Task HandleHexFlipDownload()
 {
+        isDownloading = true;
     const int delay = 200;
-    StatusMessage = "Converting Binary → Hex → Flipped Hex...";
+        StatusMessage = "Converting Instructions → Binary → Hex → Flipped Hex...";
 
         int count = instructions.Count;
         ParsedLines = instructions
-            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .Select(i => (i.instructionSyntax, i.offsetSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
             .ToList();
 
     for (int t = 0; t < count + 2; t++)
@@ -255,7 +335,8 @@
         {
             ParsedLines[t] = (
                 ParsedLines[t].Syntax,
-                Pad(instructions[t].ToBinary(), 36),
+                ParsedLines[t].OffsetSyntax,
+                instructions[t].ToBinary(),
                 ParsedLines[t].Hex,
                 ParsedLines[t].Flipped,
                 t - 1 >= 0 ? ParsedLines[t - 1].Byte : null
@@ -266,8 +347,9 @@
         {
             ParsedLines[t - 1] = (
                 ParsedLines[t - 1].Syntax,
+                ParsedLines[t - 1].OffsetSyntax,
                 ParsedLines[t - 1].Binary,
-                Pad(instructions[t - 1].ToHex(), 36),
+                instructions[t - 1].ToHex(),
                 ParsedLines[t - 1].Flipped,
                 ParsedLines[t - 1].Byte
             );
@@ -277,9 +359,10 @@
         {
             ParsedLines[t - 2] = (
                 ParsedLines[t - 2].Syntax,
+                ParsedLines[t - 2].OffsetSyntax,
                 ParsedLines[t - 2].Binary,
                 ParsedLines[t - 2].Hex,
-                Pad(instructions[t - 2].ToHexFlip(), 36),
+                instructions[t - 2].ToHexFlip(),
                 ParsedLines[t - 2].Byte
             );
         }
@@ -295,18 +378,18 @@
     await JSRuntime.InvokeVoidAsync("downloadTextFile", content, "flipped_hex.txt");
 
     StatusMessage = "Downloaded flipped_hex.txt.";
+        isDownloading = false;
 }
-
-
 
     private async Task HandleByteDownload()
     {
+        isDownloading = true;
         const int delay = 200;
-        StatusMessage = "Converting Flipped Hex → Bytes...";
+        StatusMessage = "Converting Instructions → Binary → Hex → Flipped Hex → Bytes...";
 
         int count = instructions.Count;
         ParsedLines = instructions
-            .Select(i => (i.instructionSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
+            .Select(i => (i.instructionSyntax, i.offsetSyntax, (string?)null, (string?)null, (string?)null, (string?)null))
             .ToList();
 
         for (int t = 0; t < count + 3; t++)
@@ -315,7 +398,8 @@
             {
                 ParsedLines[t] = (
                     ParsedLines[t].Syntax,
-                    Pad(instructions[t].ToBinary(), 36),
+                    ParsedLines[t].OffsetSyntax,
+                    instructions[t].ToBinary(),
                     ParsedLines[t].Hex,
                     ParsedLines[t].Flipped,
                     t - 1 >= 0 ? ParsedLines[t - 1].Byte : null
@@ -326,8 +410,9 @@
             {
                 ParsedLines[t - 1] = (
                     ParsedLines[t - 1].Syntax,
+                    ParsedLines[t - 1].OffsetSyntax,
                     ParsedLines[t - 1].Binary,
-                    Pad(instructions[t - 1].ToHex(), 36),
+                    instructions[t - 1].ToHex(),
                     ParsedLines[t - 1].Flipped,
                     ParsedLines[t - 1].Byte
                 );
@@ -337,9 +422,10 @@
             {
                 ParsedLines[t - 2] = (
                     ParsedLines[t - 2].Syntax,
+                    ParsedLines[t - 2].OffsetSyntax,
                     ParsedLines[t - 2].Binary,
                     ParsedLines[t - 2].Hex,
-                    Pad(instructions[t - 2].ToHexFlip(), 36),
+                    instructions[t - 2].ToHexFlip(),
                     ParsedLines[t - 2].Byte
                 );
             }
@@ -348,10 +434,11 @@
             {
                 ParsedLines[t - 3] = (
                     ParsedLines[t - 3].Syntax,
+                    ParsedLines[t - 3].OffsetSyntax,
                     ParsedLines[t - 3].Binary,
                     ParsedLines[t - 3].Hex,
                     ParsedLines[t - 3].Flipped,
-                    Pad(string.Join(" ", instructions[t - 3].ToByteArray().Select(b => b.ToString("X2"))), 36)
+                    string.Join(" ", instructions[t - 3].ToByteArray().Select(b => b.ToString("X2")))
                 );
             }
 
@@ -367,10 +454,8 @@
         await JSRuntime.InvokeVoidAsync("downloadBinaryFile", base64, "kernel7.img");
 
         StatusMessage = "Downloaded kernel7.img.";
+        isDownloading = false;
     }
-
-
-
 
     private DotNetObjectReference<Home>? objRef;
 

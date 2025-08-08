@@ -5,6 +5,7 @@ namespace PL_Assembler.Models
     public abstract class Instruction
     {
         public string instructionSyntax { get; set; } // this should be the instruction syntax as a string from the text file
+        public string? offsetSyntax { get; set; }
         public string[] ParsedSyntax { get; set; } // this should be the instruction syntax parsed into its components
         public string Opcode { get; set; }
         public string Rn { get; set; }
@@ -12,6 +13,7 @@ namespace PL_Assembler.Models
         public string Operand2 { get; set; }
         public string Offset { get; set; }
         public string ConditionCode { get; set; } // this should be the condition code for the instruction, if applicable
+        public string Label { get; set; } // this is the offset label replaces hard coded specific offset values
 
         public static readonly Dictionary<string, string> ConditionCodeMap = new Dictionary<string, string>
         {
@@ -34,7 +36,29 @@ namespace PL_Assembler.Models
         {
             this.instructionSyntax = instructionSyntax;
             ParseInstructionSyntax(instructionSyntax);
+            if (ParsedSyntax.Any(part => System.Text.RegularExpressions.Regex.IsMatch(part, @"<[a-zA-Z]+|>[a-zA-Z]+")))
+            {
+                Label = ParsedSyntax.First(part => System.Text.RegularExpressions.Regex.IsMatch(part, @"<[a-zA-Z]+|>[a-zA-Z]+"));
+            }
         }
+
+        public void ResolveLabelOffset(Dictionary<string, int> labelMap, int currentIndex)
+        {
+            if (string.IsNullOrEmpty(Label) || !Label.Contains(">"))
+                return;
+
+            string cleanedLabel = Label.Replace("<", "").Replace(">", "");
+            if (!labelMap.TryGetValue(cleanedLabel, out int destinationIndex))
+                throw new ArgumentException($"Destination label '<{cleanedLabel}' not found.");
+
+            int distance = (destinationIndex - currentIndex) - 2; // +2 if PC-relative offset starts 8 bytes ahead
+
+            Offset = "0x" + (distance & 0xFFFFFF).ToString("X");
+        }
+
+
+
+
 
         public static Instruction CreateInstruction(string instructionSyntax)
         {
@@ -49,6 +73,7 @@ namespace PL_Assembler.Models
                     return new SingleDataTransfer(instructionSyntax);
                 case "B":
                 case "BL":
+                case "BX":
                     return new Branch(instructionSyntax);
                 case "ADD":
                 case "SUB":
@@ -65,13 +90,13 @@ namespace PL_Assembler.Models
 
         protected void ParseInstructionSyntax(string syntax)
         {
+            ParsedSyntax = new string[] { };
             var parts = syntax.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
             ParsedSyntax = parts;
-            //// Convert to binary and hex formats
-            //this.instructionBinary = ToBinary();
-            //this.instructionHex = Convert.ToString(Convert.ToInt32(this.instructionBinary, 2), 16).PadLeft(8, '0');
-            //this.instructionHexFlip = string.Join("", this.instructionHex.Reverse());
+
         }
+
+
 
         public string ConditionCodeToBinary()
         {
@@ -93,36 +118,36 @@ namespace PL_Assembler.Models
                 return new string('0', bits); // If offset is empty, return 0s
             }
 
-            // If offset is a register, convert it to binary
             if (offset.StartsWith("R"))
             {
                 return ConvertRegisterToBinary(offset);
             }
 
-            // If offset is an immediate value, convert it to binary
+
             if (offset.StartsWith("#") || offset.StartsWith("0x"))
             {
                 int immediate = 0;
 
-                // Parse the offset as an immediate value, handling hex (# or 0x)
+  
                 if (offset.StartsWith("#"))
                 {
-                    immediate = int.Parse(offset.Substring(1)); // Remove '#' and convert
+                    immediate = int.Parse(offset.Substring(1)); 
                 }
                 else if (offset.StartsWith("0x"))
                 {
-                    immediate = Convert.ToInt32(offset, 16); // Convert hex value
+                    immediate = Convert.ToInt32(offset, 16); 
                 }
 
-                return Convert.ToString(immediate, 2).PadLeft(bits, '0'); // Convert to binary and pad
+                return Convert.ToString(immediate, 2).PadLeft(bits, '0'); 
             }
 
-            return "000000000000"; // Default if no valid offset is provided (fallback)
+            return "000000000000";
         }
 
 
         public string ConvertOpperand2ToBinary(string op2, int bits)
         {
+            int immediate = 0;
             // If operand is a register, convert it
             if (op2.StartsWith("R"))
             {
@@ -131,11 +156,11 @@ namespace PL_Assembler.Models
             // If operand is an immediate, convert it
             if (op2.StartsWith("0x"))
             {
-                int immediate = Convert.ToInt32(op2, 16);
+                immediate = Convert.ToInt32(op2, 16);
                 return Convert.ToString(immediate, 2).PadLeft(bits, '0'); // Example: #10 -> 000000001010
             }
 
-            return ToString().PadLeft(bits, '0');
+            return immediate.ToString().PadLeft(bits, '0');
         }
 
         public string ConvertImmediateToBinary(string immediate, int bits)

@@ -20,7 +20,7 @@
             s = ParsedSyntax[marker].ToUpper() == "S" ? ParsedSyntax[marker++] : "" ;
             Rd = ParsedSyntax[marker++].ToUpper();
             Rn = ParsedSyntax[marker++].ToUpper();
-            Operand2 = ParsedSyntax[marker++].ToLower();
+            Operand2 = Label == "" ? ParsedSyntax[marker++].ToLower() : "";
         }
 
         public static readonly Dictionary<string, string> OpCodeMap = new Dictionary<string, string>
