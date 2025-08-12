@@ -2,7 +2,7 @@
 {
     public class DataProcessing : Instruction
     {
-        public string i { get; set; } // Immediate flag
+        public string? i { get; set; } // Immediate flag
         public string s { get; set; } // Set condition code flag
         public DataProcessing(string condition, string i, string opcode, string s, string rn, string rd, string operand2) : base(condition, opcode, rn, rd, operand2, null)
         {
