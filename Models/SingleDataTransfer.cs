@@ -1,13 +1,16 @@
-﻿namespace PL_Assembler.Models
+﻿using System.Linq;
+
+namespace PL_Assembler.Models
 {
     public class SingleDataTransfer : Instruction
     {
-        public string i { get; set; } // Immediate offset flag
+        public string i { get; set; } = "0"; // Immediate offset flag
         public string p { get; set; } // Pre/Post indexing flag
         public string u { get; set; } // Up/Down bit
-        public string b { get; set; } // Byte/Word bit
+        public string b { get; set; } = "0"; // Byte/Word bit
         public string w { get; set; } // Write-back bit
         public string l { get; set; } // Load/Store bit
+        public string ModeName { get; set; } // Mode name
 
         public SingleDataTransfer(string conditionCode, string i, string p, string u, string b, string w, string l, string rn, string rd, string offset)
             : base(conditionCode, null, rn, rd, null, offset)
@@ -26,6 +29,9 @@
             //<LDR | STR>{cond}{B}{T} Rd, <Address>
             int marker = 0;
             this.l = ParsedSyntax[marker++].ToUpper().Contains("L") ? "L" : "";
+            this.ModeName = (ParsedSyntax[marker].Contains("E") || ParsedSyntax[marker].Contains("F")) ? ParsedSyntax[marker].Substring(ParsedSyntax[marker++].Length - 2) : "";
+            modeNameSetFlags();
+            this.w = instructionSyntax.Contains("!") ? "W" : ""; // Write-back flag
             ConditionCode = ConditionCodeMap.ContainsKey(ParsedSyntax[marker]) ? ParsedSyntax[marker++] : "AL";
             this.b = ParsedSyntax[marker].ToUpper().Contains("B") ? "B" : "";
             marker += b == "B" ? 1 : 0;
@@ -34,30 +40,28 @@
             Offset = ParsedSyntax.Length > marker ? ParsedSyntax[marker].ToLower() : "";
         }
 
-        public override string ToBinary()
+        public void modeNameSetFlags()
         {
-            
-
-
-            ConditionCode = ParsedSyntax.Length > 1 ? ParsedSyntax[1] : "AL";
-
-            ParseFlagsAndOperands();
-
-            string binaryInstruction = ConditionCodeToBinary() + "01" + i + p + u + b + w + (l.Contains("L") ? "1" : "0") + ConvertRegisterToBinary(Rn) + ConvertRegisterToBinary(Rd) + ConvertOffsetToBinary(Offset, 12);
-            //condition + 01 + i + p + u + b + w + l + rn + rd + offset
-            return binaryInstruction;
+            switch (ModeName)
+            {
+                case "ED":
+                    p = "P";
+                    u = "U";
+                    break;
+                case "FD":
+                    u = "U";
+                    break;
+                case "EA":
+                    p = "P";
+                    break;
+            }
         }
 
-
-
-        private void ParseFlagsAndOperands()
+        public override string ToBinary()
         {
-            // Set default values for the flags
-            p = "0"; 
-            u = "0"; 
-            b = "0"; 
-            w = "0"; 
-            i = "0";
+            string binaryInstruction = ConditionCodeToBinary() + "01" + i + (p == "P" ? "1" : "0") + (u == "U" ? "1" : "0") + b + (w == "W" ? "1" : "0") + (l == "L" ? "1" : "0") + ConvertRegisterToBinary(Rn) + ConvertRegisterToBinary(Rd) + ConvertOffsetToBinary(Offset, 12);
+            //condition + 01 + i + p + u + b + w + l + rn + rd + offset
+            return binaryInstruction;
         }
     }
 }

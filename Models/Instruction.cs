@@ -65,11 +65,15 @@ namespace PL_Assembler.Models
             // This method should create an instance of the appropriate Instruction subclass based on the syntax
             var parts = instructionSyntax.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
             string opcode = parts[0].ToUpper();
+            string baseOpcode = opcode.Length > 3 ? opcode.Substring(0, 3) : opcode;
+
 
             switch (opcode)
             {
                 case "LDR":
                 case "STR":
+                case "LDM":
+                case "STM":
                     return new SingleDataTransfer(instructionSyntax);
                 case "B":
                 case "BL":
@@ -80,8 +84,7 @@ namespace PL_Assembler.Models
                 case "AND":
                 case "ORR":
                     return new DataProcessing(instructionSyntax);
-                case "MOVT":
-                case "MOVW":
+                case "MOV":
                     return new MOV(instructionSyntax);
                 default:
                     throw new ArgumentException($"Unknown instruction type: {opcode}");

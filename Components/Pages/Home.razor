@@ -53,6 +53,9 @@
         <button class="btn btn-success" @onclick=HandleByteDownload disabled="@(isProcessing || isDownloading)">
             Download kernel7.img
         </button>
+        <button class="btn btn-dark" @onclick=HandleTest>
+            Download Test
+        </button>
     </div>
 
     @if (!string.IsNullOrEmpty(StatusMessage))
@@ -117,6 +120,13 @@
 
     [Inject] private IJSRuntime JSRuntime { get; set; }
 
+    private void HandleTest()
+    {
+        var testInstruction = "STREA R7, R13!, 4";
+        Console.WriteLine($"Testing instruction: {testInstruction}");
+        var instruction = Instruction.CreateInstruction(testInstruction);
+        Console.WriteLine($"Binary" + instruction.ToBinary());
+    }
 
     private async Task LoadFile(InputFileChangeEventArgs e)
     {
