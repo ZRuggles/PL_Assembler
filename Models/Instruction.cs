@@ -68,13 +68,13 @@ namespace PL_Assembler.Models
             string baseOpcode = opcode.Length > 3 ? opcode.Substring(0, 3) : opcode;
 
 
-            switch (opcode)
+            switch (baseOpcode)
             {
                 case "LDR":
                 case "STR":
                 case "LDM":
                 case "STM":
-                    return new SingleDataTransfer(instructionSyntax);
+                    return new DataTransfer(instructionSyntax);
                 case "B":
                 case "BL":
                 case "BX":
@@ -94,7 +94,7 @@ namespace PL_Assembler.Models
         protected void ParseInstructionSyntax(string syntax)
         {
             ParsedSyntax = new string[] { };
-            var parts = syntax.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = syntax.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             ParsedSyntax = parts;
 
         }
@@ -112,7 +112,7 @@ namespace PL_Assembler.Models
 
         public string ConvertRegisterToBinary(string register)
         {
-            return Convert.ToString(int.Parse(register.Replace("R", "").Replace("(", "").Replace(")","")), 2).PadLeft(4, '0'); 
+            return Convert.ToString(int.Parse(register.Replace("R", "").Replace("(", "").Replace(")","").Replace(",", "")), 2).PadLeft(4, '0'); 
         }
         public string ConvertOffsetToBinary(string offset, int bits)
         {
